@@ -29,6 +29,12 @@ if hdr_row is None:
              % (names, [str(v) for v in raw_top.iloc[0].tolist()[:12]]))
 df = pd.read_excel(XLSX, sheet_name=0, header=hdr_row)
 df.columns = [str(c).strip() for c in df.columns]
+# لو عمود "المحصل" اتغير اسمه لـ "القيمة" (فبقى عندنا عمودين "القيمة")، التاني هو المحصل
+_cols = list(df.columns)
+if 'المحصل' not in _cols and _cols.count('القيمة') == 2:
+    _i = len(_cols) - 1 - _cols[::-1].index('القيمة')
+    _cols[_i] = 'المحصل'
+    df.columns = _cols
 need = ['اسم المشروع', 'نوع الدفعة', 'تاريخ الاستحقاق', 'اسم العميل', 'تاريخ التعاقد', 'فيلا- ارض', 'القطعة',
         'اجمالى الوحدة', 'القيمة', 'المحصل', 'المتبقى', 'تاريخ السداد', 'البنك المحصل به']
 missing = [c for c in need if c not in df.columns]
