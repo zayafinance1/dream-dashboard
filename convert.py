@@ -17,19 +17,43 @@ if len(PW) < 8:
     sys.exit('DASH_PASSWORD secret مش موجود أو قصير (8 حروف على الأقل).')
 ONLY = os.environ['PROJECT'].strip() if 'PROJECT' in os.environ else DEFAULT_PROJECT
 HERE = os.path.dirname(os.path.abspath(__file__))
-df = pd.read_excel(XLSX, sheet_name=0, header=2)
+# --- اقرا الشيت الأول: دوّر على صف العناوين (اللي فيه "اسم المشروع") بدل ما نفترض مكانه ---
+raw_top = pd.read_excel(XLSX, sheet_name=0, header=None, nrows=15)
+hdr_row = None
+for i in range(len(raw_top)):
+    if any(str(v).strip() == 'اسم المشروع' for v in raw_top.iloc[i].tolist()):
+        hdr_row = i; break
+if hdr_row is None:
+    names = pd.ExcelFile(XLSX).sheet_names
+    sys.exit('مش لاقي عمود "اسم المشروع" في أول 15 صف من الشيت الأول. الشيتات: %s | أول صف: %s'
+             % (names, [str(v) for v in raw_top.iloc[0].tolist()[:12]]))
+df = pd.read_excel(XLSX, sheet_name=0, header=hdr_row)
 df.columns = [str(c).strip() for c in df.columns]
-df = df.iloc[:, :25]
+need = ['اسم المشروع', 'نوع الدفعة', 'تاريخ الاستحقاق', 'اسم العميل', 'تاريخ التعاقد', 'فيلا- ارض', 'القطعة',
+        'اجمالى الوحدة', 'القيمة', 'المحصل', 'المتبقى', 'تاريخ السداد', 'البنك المحصل به']
+missing = [c for c in need if c not in df.columns]
+if missing:
+    sys.exit('الأعمدة دي ناقصة في الملف اللي اتحمّل من Drive: %s\nالأعمدة الموجودة: %s\nغالبًا GDRIVE_FILE_ID بيشاور على ملف غلط.'
+             % (missing, [c for c in df.columns if not c.startswith('Unnamed')]))
+df = df.loc[:, ~df.columns.duplicated()]
 df = df[df['اسم المشروع'].notna()].copy()
 df['اسم المشروع'] = df['اسم المشروع'].astype(str).str.strip()
 if ONLY: df = df[df['اسم المشروع'] == ONLY].copy()
+if df.empty:
+    sys.exit('مفيش صفوف للمشروع "%s". المشاريع الموجودة في الملف: %s' % (ONLY, sorted(set(pd.read_excel(XLSX, sheet_name=0, header=hdr_row)['اسم المشروع'].dropna().astype(str).str.strip()))))
 df['t'] = df['نوع الدفعة'].fillna('').astype(str).str.strip()
 stats = {}
 
-# update date: cell Y2 of the sheet
-raw2 = pd.read_excel(XLSX, sheet_name=0, header=None, nrows=2)
-upd = pd.to_datetime(raw2.iloc[1, 24], errors='coerce')
-if pd.isna(upd): upd = pd.Timestamp.today()
+# تاريخ التحديث: أي تاريخ في الصف اللي فوق صف العناوين (كان الخلية Y2)، وإلا آخر تاريخ سداد، وإلا النهارده
+upd = None
+if hdr_row >= 1:
+    import datetime as _dt
+    for v in pd.read_excel(XLSX, sheet_name=0, header=None, nrows=hdr_row).iloc[hdr_row - 1].tolist():
+        if isinstance(v, (_dt.datetime, pd.Timestamp)) and not pd.isna(v):
+            upd = pd.Timestamp(v)
+if upd is None:
+    m = pd.to_datetime(df['تاريخ السداد'], errors='coerce').max()
+    upd = m if not pd.isna(m) else pd.Timestamp.today()
 updated = upd.strftime('%Y-%m-%d')
 
 def norm_channel(v):
