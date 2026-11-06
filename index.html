@@ -163,12 +163,14 @@ const opt=(arr,sel)=>arr.map(([v,t])=>`<option value="${v}" ${String(v)===String
 
 function start(d){
   DATA=d;
-  ['inst','con','rem','sales','mi','col'].forEach(k=>{
-    DATA[k]=d[k].map(r=>k==='inst'?{date:r[0],amount:r[1],channel:r[2],p:r[3]}
+  ['inst','con','rem','sales','mi','col','gsales','remg'].forEach(k=>{
+    DATA[k]=(d[k]||[]).map(r=>k==='inst'?{date:r[0],amount:r[1],channel:r[2],p:r[3]}
       :k==='con'?{date:r[0],amount:r[1],channel:r[2],p:r[3],unit:r[4],client:r[5]}
       :k==='rem'?{date:r[0],amount:r[1],unit:r[2],client:r[3],p:r[4],m:r[5]}
       :k==='mi'?{date:r[0],total:r[1],paid:r[2],amount:r[3],unit:r[4],client:r[5],p:r[6],kind:r[7]}
       :k==='col'?{date:r[0],amount:r[1],channel:r[2],p:r[3],cat:r[4]}
+      :k==='gsales'?{date:r[0],unit:r[1],value:r[2],client:r[3],p:r[4]}
+      :k==='remg'?{date:r[0],amount:r[1],unit:r[2],client:r[3],p:r[4]}
       :{date:r[0],unit:r[1],type:r[2],value:r[3],client:r[4],p:r[5]});
   });
   const u=d.updated.split('-');CUT=u[0]+'-'+u[1];
@@ -212,6 +214,8 @@ function vInst(){
   const byCh=groupSum(rows,x=>x.channel,x=>x.amount);
   const chK=Object.keys(byCh).sort((a,b)=>byCh[b]-byCh[a]);
   const byM=groupSum(A,x=>mkey(x.date),x=>x.amount);
+  const garAll=F(DATA.col).filter(x=>x.cat===2);
+  const garRows=all?garAll:garAll.filter(x=>mkey(x.date)===state.month);
   document.getElementById('view').innerHTML=`
   <div class="filters"><label>الشهر:</label><select id="fm">${opt([['all','كل الشهور'],...months.slice().reverse().map(m=>[m,mlabel(m)])],state.month)}</select></div>
   <div class="kpis">
@@ -219,6 +223,10 @@ function vInst(){
     <div class="card kpi"><div class="t">عدد الدفعات</div><div class="v">${fmt(rows.length)}</div></div>
     <div class="card kpi"><div class="t">متوسط الدفعة</div><div class="v">${money(rows.length?cur/rows.length:0)}</div></div>
     <div class="card kpi"><div class="t">إجمالي المتحصل منذ البداية</div><div class="v">${money(total)}</div></div>
+  </div>
+  <div class="kpis" style="margin-top:18px">
+    <div class="card kpi"><div class="t">إجمالي الجراج المحصل – ${lbl}</div><div class="v">${money(sum(garRows,x=>x.amount))}</div></div>
+    <div class="card kpi"><div class="t">عدد دفعات الجراج – ${lbl}</div><div class="v">${fmt(garRows.length)}</div></div>
   </div>
   <div class="grid2">
     <div class="card"><h3>حسب جهة التحصيل – ${lbl}</h3><div class="chartbox"><canvas id="c1"></canvas></div></div>
@@ -249,6 +257,10 @@ function vRem(){
   const byM=groupSum(rows.filter(x=>x.date),x=>mkey(x.date),x=>x.amount);
   const k2=Object.keys(byM).sort();
   const [cy,cm]=CUT.split('-');
+  let gRem=F(DATA.remg);
+  if(state.ryear==='none')gRem=gRem.filter(x=>!x.date);
+  else if(state.ryear!=='all')gRem=gRem.filter(x=>x.date.startsWith(state.ryear));
+  if(state.rmonth!=='all')gRem=gRem.filter(x=>x.date.slice(5,7)===state.rmonth);
   let body;
   if(state.rmode==='all'){
     body=`<div class="grid2">
@@ -274,6 +286,10 @@ function vRem(){
     <div class="card kpi"><div class="t">آخر تاريخ استحقاق</div><div class="v">${last}</div></div>
     <div class="card kpi"><div class="t">إجمالي المتبقي (شامل الصيانة) – ${fl}</div><div class="v">${money(sum(rows,x=>x.amount))}</div></div>
     <div class="card kpi"><div class="t">عدد الأقساط المتبقية (شامل الصيانة) – ${fl}</div><div class="v">${fmt(rows.length)}</div></div>
+  </div>
+  <div class="kpis" style="margin-top:18px">
+    <div class="card kpi"><div class="t">إجمالي الجراج المتبقي – ${fl}</div><div class="v">${money(sum(gRem,x=>x.amount))}</div></div>
+    <div class="card kpi"><div class="t">عدد أقساط الجراج المتبقية – ${fl}</div><div class="v">${fmt(gRem.length)}</div></div>
   </div>${body}`;
   bindSel('fy','ryear');bindSel('fmo','rmonth');bindSel('fmode','rmode');
   if(state.rmode==='all'){
@@ -411,14 +427,20 @@ function vSales(){
   const rows=state.smonth==='all'?A:A.filter(x=>mkey(x.date)===state.smonth);
   const byM=groupSum(A,x=>mkey(x.date),x=>x.value);
   const byT=groupSum(rows,x=>x.type,x=>x.value);
+  const gAll=F(DATA.gsales);
+  const gS=state.smonth==='all'?gAll:gAll.filter(x=>x.date&&mkey(x.date)===state.smonth);
   const lbl=state.smonth==='all'?'كل الشهور':mlabel(state.smonth);
   document.getElementById('view').innerHTML=`
   <div class="filters"><label>الشهر:</label><select id="fs">${opt([['all','كل الشهور'],...months.slice().reverse().map(m=>[m,mlabel(m)])],state.smonth)}</select></div>
   <div class="kpis">
-    <div class="card kpi"><div class="t">إجمالي المبيعات – ${lbl}</div><div class="v">${money(sum(rows,x=>x.value))}</div></div>
+    <div class="card kpi"><div class="t">إجمالي المبيعات (بدون الجراج) – ${lbl}</div><div class="v">${money(sum(rows,x=>x.value))}</div></div>
     <div class="card kpi"><div class="t">عدد الوحدات المباعة</div><div class="v">${fmt(rows.length)}</div></div>
     <div class="card kpi"><div class="t">متوسط سعر الوحدة</div><div class="v">${money(rows.length?sum(rows,x=>x.value)/rows.length:0)}</div></div>
-    <div class="card kpi"><div class="t">إجمالي المبيعات منذ البداية</div><div class="v">${money(sum(A,x=>x.value))}</div></div>
+    <div class="card kpi"><div class="t">إجمالي المبيعات منذ البداية (بدون الجراج)</div><div class="v">${money(sum(A,x=>x.value))}</div></div>
+  </div>
+  <div class="kpis" style="margin-top:18px">
+    <div class="card kpi"><div class="t">إجمالي الجراج (منفصل عن المبيعات) – ${lbl}</div><div class="v">${money(sum(gS,x=>x.value))}</div></div>
+    <div class="card kpi"><div class="t">عدد الوحدات اللي ليها جراج – ${lbl}</div><div class="v">${fmt(gS.length)}</div></div>
   </div>
   <div class="grid2">
     <div class="card"><h3>حسب نوع الوحدة – ${lbl}</h3><div class="chartbox"><canvas id="c1"></canvas></div></div>

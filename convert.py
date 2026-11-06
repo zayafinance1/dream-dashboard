@@ -128,7 +128,8 @@ rem = [[D(r['تاريخ الاستحقاق']) if pd.notna(r['تاريخ الاس
 # matches the reference sheet "Sheet1". Contract date = first contract date, else first payment date.
 df['unit'] = df['القطعة'].astype(str).str.strip()
 df['client'] = df['اسم العميل'].fillna('').astype(str).str.strip()
-h = df[df['اجمالى الوحدة'].fillna(0) > 0].copy()
+_is_g = df['t'].str.contains('جراج')
+h = df[(df['اجمالى الوحدة'].fillna(0) > 0) & ~_is_g].copy()
 def utype(v):
     v = str(v).strip()
     return v if v in ('فيلا', 'شقة', 'ارض') else 'غير محدد'
@@ -142,6 +143,25 @@ for (pj, unit, cl), g in h.groupby(['اسم المشروع', 'unit', 'client'], 
     ty = g['فيلا- ارض'].map(utype); ty = ty[ty != 'غير محدد']
     sales.append([D(d.iloc[0]), unit, ty.iloc[0] if len(ty) else 'غير محدد', r2(g['اجمالى الوحدة'].sum()), cl, pidx[pj]])
 stats['sales_no_date_skipped'] = nodate
+
+# ---- الجراج: (أ) قيمة الجراج لكل وحدة (من صفوف إجمالى الوحدة اللي نوعها "جراج") - بتتعرض منفصلة عن المبيعات
+unit_date = {}
+for (pj, unit, cl), g in h.groupby(['اسم المشروع', 'unit', 'client'], sort=False):
+    d = g['تاريخ التعاقد'].dropna()
+    if not d.empty: unit_date.setdefault((pj, unit), D(d.iloc[0]))
+gsales = []
+gh = df[(df['اجمالى الوحدة'].fillna(0) > 0) & _is_g]
+for (pj, unit, cl), g in gh.groupby(['اسم المشروع', 'unit', 'client'], sort=False):
+    d = g['تاريخ التعاقد'].dropna()
+    dd = D(d.iloc[0]) if not d.empty else unit_date.get((pj, unit))
+    if not dd:
+        ar = df[(df['اسم المشروع'] == pj) & (df['unit'] == unit)]['تاريخ الاستحقاق'].dropna()
+        dd = D(ar.min()) if not ar.empty else ''
+    gsales.append([dd, unit, r2(g['اجمالى الوحدة'].sum()), cl, pidx[pj]])
+# (ب) أقساط الجراج المتبقية
+remg = [[D(r['تاريخ الاستحقاق']) if pd.notna(r['تاريخ الاستحقاق']) else '', r2(r['المتبقى']),
+         str(r['القطعة']).strip() if pd.notna(r['القطعة']) else '', str(r['اسم العميل']).strip() if pd.notna(r['اسم العميل']) else '', pidx[r['اسم المشروع']]]
+        for _, r in pay[(pay['t'].map(cat_of) == 2) & (pay['المتبقى'].fillna(0) > 0)].iterrows()]
 
 
 # ---- maintenance & infrastructure (pure types only)
@@ -160,7 +180,7 @@ try:
     _now = datetime.now(ZoneInfo('Africa/Cairo'))
 except Exception:
     _now = datetime.now(timezone(timedelta(hours=2)))
-payload = dict(updated=updated, synced=_now.strftime('%Y-%m-%d %H:%M'), projects=projects, inst=inst, con=con, rem=rem, sales=sales, mi=mi, col=colall)
+payload = dict(updated=updated, synced=_now.strftime('%Y-%m-%d %H:%M'), projects=projects, inst=inst, con=con, rem=rem, sales=sales, mi=mi, col=colall, gsales=gsales, remg=remg)
 raw = gzip.compress(json.dumps(payload, ensure_ascii=False, separators=(',', ':')).encode('utf-8'), 9)
 salt, iv = os.urandom(16), os.urandom(12)
 key = PBKDF2HMAC(hashes.SHA256(), 32, salt, 200000).derive(PW.encode('utf-8'))
@@ -168,4 +188,4 @@ ct = AESGCM(key).encrypt(iv, raw, None)
 blob = json.dumps({'s': base64.b64encode(salt).decode(), 'i': base64.b64encode(iv).decode(), 'c': base64.b64encode(ct).decode()})
 
 open(os.path.join(HERE, 'data.enc.json'), 'w', encoding='utf-8').write(blob)
-print('OK updated', updated, 'projects', projects, 'inst', len(inst), 'con', len(con), 'rem', len(rem), 'sales', len(sales), 'mi', len(mi), 'col', len(colall), stats)
+print('OK updated', updated, 'projects', projects, 'inst', len(inst), 'con', len(con), 'rem', len(rem), 'sales', len(sales), 'mi', len(mi), 'col', len(colall), 'gsales', len(gsales), 'remg', len(remg), stats)
