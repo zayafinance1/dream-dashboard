@@ -37,6 +37,15 @@ h1{margin:0;font-size:26px}
 .filters{display:flex;gap:14px;align-items:center;margin:20px 0;flex-wrap:wrap}
 .filters label{font-weight:700;font-size:17px}
 select{font:inherit;font-size:16px;padding:6px 14px;border-radius:10px;border:1px solid #c5d4ee;background:#fff;color:var(--ink);min-width:150px}
+.mdd{position:relative}
+.mdd-b{font:inherit;font-size:16px;padding:6px 14px;border-radius:10px;border:1px solid #c5d4ee;background:#fff;color:var(--ink);min-width:170px;cursor:pointer;text-align:right;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.mdd-b:after{content:'▾';font-size:12px}
+.mdd-p{position:absolute;top:calc(100% + 6px);right:0;z-index:30;background:#fff;border:1px solid #c5d4ee;border-radius:12px;box-shadow:0 8px 24px rgba(6,20,46,.25);padding:10px;min-width:210px;max-height:340px;overflow:auto}
+.mdd-t{display:flex;gap:8px;margin-bottom:8px}
+.mdd-t button{flex:1;font:600 14px 'Cairo',sans-serif;padding:5px 8px;border-radius:8px;border:1px solid #c5d4ee;background:#f3f7ff;color:#06142e;cursor:pointer}
+.mdd-i{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:16px}
+.mdd-i:hover{background:#eef3ff}
+.mdd-i input{width:17px;height:17px;accent-color:#0b3d91}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
 .kpis.k3{grid-template-columns:repeat(3,1fr);margin-top:18px}
 .kpis.k3:first-of-type{margin-top:0}
@@ -147,7 +156,7 @@ const money=n=>`<small>ج.م</small> ${fmt(n)}`;
 const mkey=d=>d.slice(0,7);
 const mlabel=k=>{const[y,m]=k.split('-');return AR_M[+m-1]+' '+y};
 let CUT='';                       // أول الشهر الحالي: أي استحقاق قبله = متأخر
-const state={psub:'proj',pyear:'all',pmonth:'all',mkind:'all',myear:'all',proj:'all',tab:'inst',month:'latest',ryear:'cur',rmonth:'all',rmode:'all',cmonth:'all',smonth:'all'};
+const state={psub:'proj',pyear:'all',pmonths:['01','02','03','04','05','06','07','08','09','10','11','12'],pmopen:false,mkind:'all',myear:'all',proj:'all',tab:'inst',month:'latest',ryear:'cur',rmonth:'all',rmode:'all',cmonth:'all',smonth:'all'};
 let charts=[];
 const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0);
 const groupSum=(a,kf,vf)=>{const o={};a.forEach(x=>{const k=kf(x);o[k]=(o[k]||0)+vf(x)});return o};
@@ -199,6 +208,16 @@ function render(){
   shell();
   ({inst:vInst,col:vCol,rem:vRem,con:vCon,sales:vSales,mi:vMI})[state.tab]();
 }
+function mddLabel(sel){return sel.length===12?'كل الشهور':sel.length===0?'لا شيء':sel.length<=2?sel.map(m=>AR_M[+m-1]).join('، '):sel.length+' شهور'}
+function mddHtml(id,sel){return `<div class="mdd" id="${id}"><button type="button" class="mdd-b">${mddLabel(sel)}</button>${state.pmopen?`<div class="mdd-p"><div class="mdd-t"><button type="button" data-a="all">تحديد الكل</button><button type="button" data-a="none">مسح الكل</button></div>${AR_M.map((m,i)=>{const v=String(i+1).padStart(2,'0');return `<label class="mdd-i"><input type="checkbox" value="${v}" ${sel.includes(v)?'checked':''}> ${m}</label>`}).join('')}</div>`:''}</div>`}
+function mddBind(id,key){const r=document.getElementById(id);if(!r)return;
+  r.querySelector('.mdd-b').onclick=e=>{e.stopPropagation();state.pmopen=!state.pmopen;render()};
+  const p=r.querySelector('.mdd-p');if(!p)return;
+  p.onclick=e=>e.stopPropagation();
+  p.querySelectorAll('button').forEach(b=>b.onclick=()=>{state[key]=b.dataset.a==='all'?[...M12]:[];render()});
+  p.querySelectorAll('input').forEach(c=>c.onchange=()=>{const s=new Set(state[key]);c.checked?s.add(c.value):s.delete(c.value);state[key]=[...s].sort();render()})}
+document.addEventListener('click',()=>{if(state.pmopen){state.pmopen=false;render()}});
+const M12=['01','02','03','04','05','06','07','08','09','10','11','12'];
 function bindSel(id,key){const e=document.getElementById(id);if(e)e.onchange=()=>{state[key]=e.value;render()}}
 const projName=()=>state.proj==='all'?'كل المشاريع':DATA.projects[state.proj];
 
@@ -308,8 +327,8 @@ function vCol(){
   const years=[...new Set(A.map(x=>x.date.slice(0,4)))].sort();
   if(state.pyear!=='all'&&!years.includes(state.pyear))state.pyear='all';
   const inYear=state.pyear==='all'?A:A.filter(x=>x.date.startsWith(state.pyear));
-  const rows=state.pmonth==='all'?inYear:inYear.filter(x=>x.date.slice(5,7)===state.pmonth);
-  const lbl=(state.pyear==='all'?'كل الفترة':state.pyear)+(state.pmonth==='all'?'':' – '+AR_M[+state.pmonth-1]);
+  const rows=state.pmonths.length===12?inYear:inYear.filter(x=>state.pmonths.includes(x.date.slice(5,7)));
+  const lbl=(state.pyear==='all'?'كل الفترة':state.pyear)+(state.pmonths.length===12?'':' – '+mddLabel(state.pmonths));
   const cat=c=>sum(rows.filter(x=>x.cat===c),x=>x.amount);
   const total=sum(rows,x=>x.amount), all=sum(A,x=>x.amount), other=cat(3);
   const card=(t,v)=>`<div class="card kpi"><div class="t">${t}</div><div class="v">${v}</div></div>`;
@@ -333,17 +352,17 @@ function vCol(){
   <div class="pills"><button class="pill ${maint?'':'on'}" data-s="proj">المتحصل من المشروع</button><button class="pill ${maint?'on':''}" data-s="maint">المتحصل من الصيانة</button></div>
   <div class="filters">
     <label>السنة:</label><select id="py">${opt([['all','كل السنين'],...years.map(y=>[y,y])],state.pyear)}</select>
-    <label>الشهر:</label><select id="pm">${opt([['all','كل الشهور'],...AR_M.map((m,i)=>[String(i+1).padStart(2,'0'),m])],state.pmonth)}</select>
+    <label>الشهر:</label>${mddHtml('pm',state.pmonths)}
   </div>${kp}${table}
   <div class="grid2">
     <div class="card"><h3>حسب جهة التحصيل – ${lbl}</h3><div class="chartbox"><canvas id="c1"></canvas></div></div>
     <div class="card"><h3>المتحصل شهريًا – ${state.pyear==='all'?'كل الفترة':state.pyear} (اضغط على عمود لتصفية الشهر)</h3><div class="chartbox"><canvas id="c2"></canvas></div></div>
   </div>`;
-  document.querySelectorAll('.pill').forEach(b=>b.onclick=()=>{state.psub=b.dataset.s;state.pyear='all';state.pmonth='all';render()});
-  bindSel('py','pyear');bindSel('pm','pmonth');
+  document.querySelectorAll('.pill').forEach(b=>b.onclick=()=>{state.psub=b.dataset.s;state.pyear='all';state.pmonths=[...M12];state.pmopen=false;render()});
+  bindSel('py','pyear');mddBind('pm','pmonths');
   mk('c1',{type:'bar',data:{labels:chK,datasets:[{data:chK.map(k=>byCh[k]),backgroundColor:'#0b3d91',borderRadius:4}]},options:hOpts()});
-  mk('c2',{type:'bar',data:{labels:k2.map(mlabel),datasets:[{data:k2.map(k=>byM[k]),backgroundColor:k2.map(k=>(state.pmonth!=='all'&&k.slice(5)===state.pmonth)?'#0b3d91':'#2f80ed'),borderRadius:3}]},
-    options:vOpts({onClick:(e,els)=>{if(els.length){const k=k2[els[0].index];state.pyear=k.slice(0,4);state.pmonth=state.pmonth===k.slice(5)?'all':k.slice(5);render()}}})});
+  mk('c2',{type:'bar',data:{labels:k2.map(mlabel),datasets:[{data:k2.map(k=>byM[k]),backgroundColor:k2.map(k=>(state.pmonths.length<12&&state.pmonths.includes(k.slice(5)))?'#0b3d91':'#2f80ed'),borderRadius:3}]},
+    options:vOpts({onClick:(e,els)=>{if(els.length){const k=k2[els[0].index];state.pyear=k.slice(0,4);const mm=k.slice(5);state.pmonths=(state.pmonths.length===1&&state.pmonths[0]===mm)?[...M12]:[mm];render()}}})});
 }
 
 /* ---- الصيانة والبنية التحتية ---- */
