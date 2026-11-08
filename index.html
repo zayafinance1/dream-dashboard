@@ -199,7 +199,7 @@ function shell(){
   document.getElementById('upd').textContent=`آخر تحديث للبيانات: ${u[2]}-${u[1]}-${u[0]}`+(DATA.synced?` — آخر مزامنة: ${DATA.synced}`:'');
   const pl=DATA.projects.length===1?[[0,DATA.projects[0]]]:[['all','كل المشاريع'],...DATA.projects.map((p,i)=>[i,p])];
   document.getElementById('projects').innerHTML=`<label>المشروع:</label><select id="psel">${opt(pl,state.proj)}</select>`;
-  document.getElementById('tabs').innerHTML=TABS.map(([k,t])=>`<button class="tab ${k===state.tab?'on':''}" data-k="${k}">${t}</button>`).join('');
+  document.getElementById('tabs').innerHTML=TABS.map(([k,t])=>`<button class="tab ${k===state.tab?'on':''}" data-k="${k}">${k==='mi'&&!hasInfra()?'الصيانة':t}</button>`).join('');
   document.getElementById('psel').onchange=e=>{state.proj=e.target.value==='all'?'all':+e.target.value;state.month='latest';state.cmonth='all';state.smonth='all';state.rmonth='all';render()};
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{state.tab=b.dataset.k;render()});
 }
@@ -366,8 +366,11 @@ function vCol(){
 }
 
 /* ---- الصيانة والبنية التحتية ---- */
+function hasInfra(){return DATA.mi.some(x=>x.kind===1&&(state.proj==='all'||x.p===state.proj))}
 function vMI(){
   let A=F(DATA.mi);
+  const HI=hasInfra();
+  if(!HI)state.mkind='0';
   if(state.mkind!=='all')A=A.filter(x=>String(x.kind)===state.mkind);
   const years=[...new Set(A.filter(x=>x.date).map(x=>x.date.slice(0,4)))].sort();
   const hasUndated=A.some(x=>!x.date);
@@ -389,7 +392,7 @@ function vMI(){
   const LIM=1500;
   document.getElementById('view').innerHTML=`
   <div class="filters">
-    <label>النوع:</label><select id="mk">${opt([['all','الصيانة والبنية التحتية'],['0','الصيانة'],['1','البنية التحتية']],state.mkind)}</select>
+    ${HI?`<label>النوع:</label><select id="mk">${opt([['all','الصيانة والبنية التحتية'],['0','الصيانة'],['1','البنية التحتية']],state.mkind)}</select>`:''}
     <label>السنة:</label><select id="my">${opt([['all','كل السنين'],...years.map(y=>[y,y]),...(hasUndated?[['none','بدون تاريخ']]:[])],state.myear)}</select>
   </div>
   <div class="kpis">
@@ -451,15 +454,16 @@ function vSales(){
   const lbl=state.smonth==='all'?'كل الشهور':mlabel(state.smonth);
   document.getElementById('view').innerHTML=`
   <div class="filters"><label>الشهر:</label><select id="fs">${opt([['all','كل الشهور'],...months.slice().reverse().map(m=>[m,mlabel(m)])],state.smonth)}</select></div>
-  <div class="kpis">
+  <div class="kpis k3">
     <div class="card kpi"><div class="t">إجمالي المبيعات (بدون الجراج) – ${lbl}</div><div class="v">${money(sum(rows,x=>x.value))}</div></div>
-    <div class="card kpi"><div class="t">عدد الوحدات المباعة</div><div class="v">${fmt(rows.length)}</div></div>
-    <div class="card kpi"><div class="t">متوسط سعر الوحدة</div><div class="v">${money(rows.length?sum(rows,x=>x.value)/rows.length:0)}</div></div>
-    <div class="card kpi"><div class="t">إجمالي المبيعات منذ البداية (بدون الجراج)</div><div class="v">${money(sum(A,x=>x.value))}</div></div>
+    <div class="card kpi"><div class="t">إجمالي الجراج – ${lbl}</div><div class="v">${money(sum(gS,x=>x.value))}</div></div>
+    <div class="card kpi"><div class="t">إجمالي المبيعات والجراج – ${lbl}</div><div class="v">${money(sum(rows,x=>x.value)+sum(gS,x=>x.value))}</div></div>
   </div>
   <div class="kpis" style="margin-top:18px">
-    <div class="card kpi"><div class="t">إجمالي الجراج (منفصل عن المبيعات) – ${lbl}</div><div class="v">${money(sum(gS,x=>x.value))}</div></div>
+    <div class="card kpi"><div class="t">عدد الوحدات المباعة – ${lbl}</div><div class="v">${fmt(rows.length)}</div></div>
+    <div class="card kpi"><div class="t">متوسط سعر الوحدة</div><div class="v">${money(rows.length?sum(rows,x=>x.value)/rows.length:0)}</div></div>
     <div class="card kpi"><div class="t">عدد الوحدات اللي ليها جراج – ${lbl}</div><div class="v">${fmt(gS.length)}</div></div>
+    <div class="card kpi"><div class="t">إجمالي المبيعات والجراج منذ البداية</div><div class="v">${money(sum(A,x=>x.value)+sum(gAll,x=>x.value))}</div></div>
   </div>
   <div class="grid2">
     <div class="card"><h3>حسب نوع الوحدة – ${lbl}</h3><div class="chartbox"><canvas id="c1"></canvas></div></div>
