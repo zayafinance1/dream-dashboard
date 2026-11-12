@@ -322,8 +322,7 @@ function vRem(){
 
 /* ---- المتحصل من المشروع / الصيانة ---- */
 function vCol(){
-  const maint=state.psub==='maint';
-  const A=F(DATA.col).filter(x=>maint?x.cat===4:x.cat!==4);
+  const A=F(DATA.col);
   const years=[...new Set(A.map(x=>x.date.slice(0,4)))].sort();
   if(state.pyear!=='all'&&!years.includes(state.pyear))state.pyear='all';
   const inYear=state.pyear==='all'?A:A.filter(x=>x.date.startsWith(state.pyear));
@@ -332,10 +331,8 @@ function vCol(){
   const cat=c=>sum(rows.filter(x=>x.cat===c),x=>x.amount);
   const total=sum(rows,x=>x.amount), all=sum(A,x=>x.amount), other=cat(3);
   const card=(t,v)=>`<div class="card kpi"><div class="t">${t}</div><div class="v">${v}</div></div>`;
-  const kp=maint
-    ?`<div class="kpis k3">${card('إجمالي المتحصل من الصيانة – '+lbl,money(total))}${card('عدد الدفعات',fmt(rows.length))}${card('إجمالي المتحصل منذ البداية',money(all))}</div>`
-    :`<div class="kpis k3">${card('إجمالي المتحصل من المشروع – '+lbl,money(total))}${card('الأقساط',money(cat(0)))}${card('دفعات التعاقد',money(cat(1)))}</div>
-      <div class="kpis k3">${card('الجراج',money(cat(2)))}${other>0?card('أخرى (بنية تحتية، باقي ثمن، غرامات...)',money(other)):card('عدد الدفعات',fmt(rows.length))}${other>0?card('عدد الدفعات',fmt(rows.length)):card('إجمالي المتحصل منذ البداية',money(all))}</div>${other>0?`<div class="kpis k3">${card('إجمالي المتحصل منذ البداية',money(all))}</div>`:''}`;
+  const kp=`<div class="kpis k3">${card('إجمالي المتحصل من المشروع – '+lbl,money(total))}${card('الأقساط',money(cat(0)))}${card('دفعات التعاقد',money(cat(1)))}</div>
+      <div class="kpis k3">${card('الجراج',money(cat(2)))}${card('الصيانة',money(cat(4)))}${other>0?card('أخرى (بنية تحتية، باقي ثمن، غرامات...)',money(other)):card('إجمالي المتحصل منذ البداية',money(all))}</div>${other>0?`<div class="kpis k3">${card('إجمالي المتحصل منذ البداية',money(all))}</div>`:''}`;
   // مصفوفة السنة × الشهر (بتتأثر بفلتر السنة فقط)
   const yrs=state.pyear==='all'?years:[state.pyear];
   const mat={};inWrap();function inWrap(){inYear.forEach(x=>{const y=x.date.slice(0,4),m=+x.date.slice(5,7);(mat[y]=mat[y]||Array(13).fill(0));mat[y][m]+=x.amount;mat[y][0]+=x.amount})}
@@ -349,7 +346,6 @@ function vCol(){
   const byM=groupSum(inYear,x=>mkey(x.date),x=>x.amount);
   const k2=Object.keys(byM).sort();
   document.getElementById('view').innerHTML=`
-  <div class="pills"><button class="pill ${maint?'':'on'}" data-s="proj">المتحصل من المشروع</button><button class="pill ${maint?'on':''}" data-s="maint">المتحصل من الصيانة</button></div>
   <div class="filters">
     <label>السنة:</label><select id="py">${opt([['all','كل السنين'],...years.map(y=>[y,y])],state.pyear)}</select>
     <label>الشهر:</label>${mddHtml('pm',state.pmonths)}
@@ -358,7 +354,6 @@ function vCol(){
     <div class="card"><h3>حسب جهة التحصيل – ${lbl}</h3><div class="chartbox"><canvas id="c1"></canvas></div></div>
     <div class="card"><h3>المتحصل شهريًا – ${state.pyear==='all'?'كل الفترة':state.pyear} (اضغط على عمود لتصفية الشهر)</h3><div class="chartbox"><canvas id="c2"></canvas></div></div>
   </div>`;
-  document.querySelectorAll('.pill').forEach(b=>b.onclick=()=>{state.psub=b.dataset.s;state.pyear='all';state.pmonths=[...M12];state.pmopen=false;render()});
   bindSel('py','pyear');mddBind('pm','pmonths');
   mk('c1',{type:'bar',data:{labels:chK,datasets:[{data:chK.map(k=>byCh[k]),backgroundColor:'#0b3d91',borderRadius:4}]},options:hOpts()});
   mk('c2',{type:'bar',data:{labels:k2.map(mlabel),datasets:[{data:k2.map(k=>byM[k]),backgroundColor:k2.map(k=>(state.pmonths.length<12&&state.pmonths.includes(k.slice(5)))?'#0b3d91':'#2f80ed'),borderRadius:3}]},
