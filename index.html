@@ -331,8 +331,8 @@ function vCol(){
   const cat=c=>sum(rows.filter(x=>x.cat===c),x=>x.amount);
   const total=sum(rows,x=>x.amount), all=sum(A,x=>x.amount), other=cat(3);
   const card=(t,v)=>`<div class="card kpi"><div class="t">${t}</div><div class="v">${v}</div></div>`;
-  const kp=`<div class="kpis k3">${card('إجمالي المتحصل من المشروع – '+lbl,money(total))}${card('الأقساط',money(cat(0)))}${card('دفعات التعاقد',money(cat(1)))}</div>
-      <div class="kpis k3">${card('الجراج',money(cat(2)))}${card('الصيانة',money(cat(4)))}${other>0?card('أخرى (بنية تحتية، باقي ثمن، غرامات...)',money(other)):card('إجمالي المتحصل منذ البداية',money(all))}</div>${other>0?`<div class="kpis k3">${card('إجمالي المتحصل منذ البداية',money(all))}</div>`:''}`;
+  const kp=`<div class="kpis k3">${card('إجمالي المتحصل من المشروع (بدون الصيانة والجراج) – '+lbl,money(total-cat(2)-cat(4)))}${card('الأقساط',money(cat(0)))}${card('دفعات التعاقد',money(cat(1)))}</div>
+      <div class="kpis k3">${card('الجراج',money(cat(2)))}${card('الصيانة',money(cat(4)))}${other>0?card('أخرى (بنية تحتية، باقي ثمن، غرامات...)',money(other)):card('إجمالي المتحصل منذ البداية (شامل الصيانة والجراج)',money(all))}</div>${other>0?`<div class="kpis k3">${card('إجمالي المتحصل منذ البداية (شامل الصيانة والجراج)',money(all))}</div>`:''}`;
   // مصفوفة السنة × الشهر (بتتأثر بفلتر السنة فقط)
   const yrs=state.pyear==='all'?years:[state.pyear];
   const mat={};inWrap();function inWrap(){inYear.forEach(x=>{const y=x.date.slice(0,4),m=+x.date.slice(5,7);(mat[y]=mat[y]||Array(13).fill(0));mat[y][m]+=x.amount;mat[y][0]+=x.amount})}
