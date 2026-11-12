@@ -303,12 +303,14 @@ function vRem(){
   <div class="kpis">
     <div class="card kpi"><div class="t">متأخرات (قبل ${AR_M[+cm-1]} ${cy})</div><div class="v late">${money(sum(lateAll,x=>x.amount))}</div></div>
     <div class="card kpi"><div class="t">آخر تاريخ استحقاق</div><div class="v">${last}</div></div>
-    <div class="card kpi"><div class="t">إجمالي المتبقي (شامل الصيانة) – ${fl}</div><div class="v">${money(sum(rows,x=>x.amount))}</div></div>
-    <div class="card kpi"><div class="t">عدد الأقساط المتبقية (شامل الصيانة) – ${fl}</div><div class="v">${fmt(rows.length)}</div></div>
+    <div class="card kpi"><div class="t">إجمالي المتبقي (بدون الصيانة والجراج) – ${fl}</div><div class="v">${money(sum(rows.filter(x=>!x.m),x=>x.amount))}</div></div>
+    <div class="card kpi"><div class="t">عدد الأقساط المتبقية (بدون الصيانة) – ${fl}</div><div class="v">${fmt(rows.filter(x=>!x.m).length)}</div></div>
   </div>
   <div class="kpis" style="margin-top:18px">
+    <div class="card kpi"><div class="t">إجمالي الصيانة المتبقي – ${fl}</div><div class="v">${money(sum(rows.filter(x=>x.m),x=>x.amount))}</div></div>
     <div class="card kpi"><div class="t">إجمالي الجراج المتبقي – ${fl}</div><div class="v">${money(sum(gRem,x=>x.amount))}</div></div>
     <div class="card kpi"><div class="t">عدد أقساط الجراج المتبقية – ${fl}</div><div class="v">${fmt(gRem.length)}</div></div>
+    <div class="card kpi"><div class="t">إجمالي المتبقي (شامل الصيانة والجراج) – ${fl}</div><div class="v">${money(sum(rows,x=>x.amount)+sum(gRem,x=>x.amount))}</div></div>
   </div>${body}`;
   bindSel('fy','ryear');bindSel('fmo','rmonth');bindSel('fmode','rmode');
   if(state.rmode==='all'){
