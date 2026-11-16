@@ -229,7 +229,9 @@ function vInst(){
   const all=state.month==='all';
   const rows=all?A:A.filter(x=>mkey(x.date)===state.month);
   const lbl=all?'كل الشهور':mlabel(state.month);
-  const cur=sum(rows,x=>x.amount),total=sum(A,x=>x.amount);
+  const garAll0=F(DATA.col).filter(x=>x.cat===2);
+  const garRows0=all?garAll0:garAll0.filter(x=>mkey(x.date)===state.month);
+  const cur=sum(rows,x=>x.amount)+sum(garRows0,x=>x.amount),total=sum(A,x=>x.amount)+sum(garAll0,x=>x.amount),cnt=rows.length+garRows0.length;
   const byCh=groupSum(rows,x=>x.channel,x=>x.amount);
   const chK=Object.keys(byCh).sort((a,b)=>byCh[b]-byCh[a]);
   const byM=groupSum(A,x=>mkey(x.date),x=>x.amount);
@@ -238,10 +240,10 @@ function vInst(){
   document.getElementById('view').innerHTML=`
   <div class="filters"><label>الشهر:</label><select id="fm">${opt([['all','كل الشهور'],...months.slice().reverse().map(m=>[m,mlabel(m)])],state.month)}</select></div>
   <div class="kpis">
-    <div class="card kpi"><div class="t">إجمالي المتحصل (بدون الصيانة والجراج) – ${lbl}</div><div class="v">${money(cur)}</div></div>
-    <div class="card kpi"><div class="t">عدد الدفعات</div><div class="v">${fmt(rows.length)}</div></div>
-    <div class="card kpi"><div class="t">متوسط الدفعة</div><div class="v">${money(rows.length?cur/rows.length:0)}</div></div>
-    <div class="card kpi"><div class="t">إجمالي المتحصل منذ البداية</div><div class="v">${money(total)}</div></div>
+    <div class="card kpi"><div class="t">إجمالي المتحصل (شامل الجراج، بدون الصيانة) – ${lbl}</div><div class="v">${money(cur)}</div></div>
+    <div class="card kpi"><div class="t">عدد الدفعات</div><div class="v">${fmt(cnt)}</div></div>
+    <div class="card kpi"><div class="t">متوسط الدفعة</div><div class="v">${money(cnt?cur/cnt:0)}</div></div>
+    <div class="card kpi"><div class="t">إجمالي المتحصل منذ البداية (شامل الجراج، بدون الصيانة)</div><div class="v">${money(total)}</div></div>
   </div>
   <div class="kpis" style="margin-top:18px">
     <div class="card kpi"><div class="t">إجمالي الجراج المحصل – ${lbl}</div><div class="v">${money(sum(garRows,x=>x.amount))}</div></div>
@@ -260,7 +262,7 @@ function vInst(){
 
 /* ---- المتبقي ---- */
 function vRem(){
-  const A=F(DATA.rem);
+  const A=F(DATA.rem).filter(x=>!x.m).concat(F(DATA.remg).map(x=>({...x,m:0,g:1})));
   const years=[...new Set(A.filter(x=>x.date).map(x=>x.date.slice(0,4)))].sort();
   const hasUndated=A.some(x=>!x.date);
   if(state.ryear==='cur')state.ryear=years.includes(state.cur)?state.cur:'all';
@@ -288,9 +290,9 @@ function vRem(){
   }else{
     const sorted=rows.slice().sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
     const LIM=1500;
-    body=`<div class="card" style="margin-top:18px"><h3>تفاصيل الأقساط المتبقية (شامل الصيانة)</h3><div class="scroll"><table>
+    body=`<div class="card" style="margin-top:18px"><h3>تفاصيل الأقساط المتبقية (شامل الجراج، بدون الصيانة)</h3><div class="scroll"><table>
       <tr><th>تاريخ الاستحقاق</th><th>العميل</th><th>الوحدة</th>${state.proj==='all'?'<th>المشروع</th>':''}<th>النوع</th><th>المبلغ المتبقي</th><th>الحالة</th></tr>
-      ${sorted.slice(0,LIM).map(x=>{const l=x.date&&mkey(x.date)<CUT;return `<tr><td>${x.date||'—'}</td><td>${esc(x.client)}</td><td>${esc(x.unit)}</td>${state.proj==='all'?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${x.m?'صيانة':'قسط'}</td><td>${fmt(x.amount)}</td><td class="${l?'late':''}">${!x.date?'بدون تاريخ':l?'متأخر':'قادم'}</td></tr>`}).join('')}
+      ${sorted.slice(0,LIM).map(x=>{const l=x.date&&mkey(x.date)<CUT;return `<tr><td>${x.date||'—'}</td><td>${esc(x.client)}</td><td>${esc(x.unit)}</td>${state.proj==='all'?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${x.g?'جراج':'قسط'}</td><td>${fmt(x.amount)}</td><td class="${l?'late':''}">${!x.date?'بدون تاريخ':l?'متأخر':'قادم'}</td></tr>`}).join('')}
       </table></div>${sorted.length>LIM?`<div class="note">معروض أول ${LIM} قسط من ${fmt(sorted.length)} — استخدم فلتر السنة أو الشهر للتضييق.</div>`:''}</div>`;
   }
   const fl=(state.ryear==='all'?'كل السنين':state.ryear==='none'?'بدون تاريخ':state.ryear)+(state.rmonth==='all'?'':' – '+AR_M[+state.rmonth-1]);
@@ -303,14 +305,12 @@ function vRem(){
   <div class="kpis">
     <div class="card kpi"><div class="t">متأخرات (قبل ${AR_M[+cm-1]} ${cy})</div><div class="v late">${money(sum(lateAll,x=>x.amount))}</div></div>
     <div class="card kpi"><div class="t">آخر تاريخ استحقاق</div><div class="v">${last}</div></div>
-    <div class="card kpi"><div class="t">إجمالي المتبقي (بدون الصيانة والجراج) – ${fl}</div><div class="v">${money(sum(rows.filter(x=>!x.m),x=>x.amount))}</div></div>
-    <div class="card kpi"><div class="t">عدد الأقساط المتبقية (بدون الصيانة) – ${fl}</div><div class="v">${fmt(rows.filter(x=>!x.m).length)}</div></div>
+    <div class="card kpi"><div class="t">إجمالي المتبقي (شامل الجراج، بدون الصيانة) – ${fl}</div><div class="v">${money(sum(rows,x=>x.amount))}</div></div>
+    <div class="card kpi"><div class="t">عدد الأقساط المتبقية (شامل الجراج) – ${fl}</div><div class="v">${fmt(rows.length)}</div></div>
   </div>
   <div class="kpis" style="margin-top:18px">
-    <div class="card kpi"><div class="t">إجمالي الصيانة المتبقي – ${fl}</div><div class="v">${money(sum(rows.filter(x=>x.m),x=>x.amount))}</div></div>
-    <div class="card kpi"><div class="t">إجمالي الجراج المتبقي – ${fl}</div><div class="v">${money(sum(gRem,x=>x.amount))}</div></div>
-    <div class="card kpi"><div class="t">عدد أقساط الجراج المتبقية – ${fl}</div><div class="v">${fmt(gRem.length)}</div></div>
-    <div class="card kpi"><div class="t">إجمالي المتبقي (شامل الصيانة والجراج) – ${fl}</div><div class="v">${money(sum(rows,x=>x.amount)+sum(gRem,x=>x.amount))}</div></div>
+    <div class="card kpi"><div class="t">منها: الجراج المتبقي – ${fl}</div><div class="v">${money(sum(gRem,x=>x.amount))}</div></div>
+    <div class="card kpi"><div class="t">منها: أقساط الجراج المتبقية – ${fl}</div><div class="v">${fmt(gRem.length)}</div></div>
   </div>${body}`;
   bindSel('fy','ryear');bindSel('fmo','rmonth');bindSel('fmode','rmode');
   if(state.rmode==='all'){
@@ -324,7 +324,7 @@ function vRem(){
 
 /* ---- المتحصل من المشروع / الصيانة ---- */
 function vCol(){
-  const A=F(DATA.col);
+  const A=F(DATA.col).filter(x=>x.cat!==4);
   const years=[...new Set(A.map(x=>x.date.slice(0,4)))].sort();
   if(state.pyear!=='all'&&!years.includes(state.pyear))state.pyear='all';
   const inYear=state.pyear==='all'?A:A.filter(x=>x.date.startsWith(state.pyear));
@@ -333,8 +333,8 @@ function vCol(){
   const cat=c=>sum(rows.filter(x=>x.cat===c),x=>x.amount);
   const total=sum(rows,x=>x.amount), all=sum(A,x=>x.amount), other=cat(3);
   const card=(t,v)=>`<div class="card kpi"><div class="t">${t}</div><div class="v">${v}</div></div>`;
-  const kp=`<div class="kpis k3">${card('إجمالي المتحصل من المشروع (بدون الصيانة والجراج) – '+lbl,money(total-cat(2)-cat(4)))}${card('الأقساط',money(cat(0)))}${card('دفعات التعاقد',money(cat(1)))}</div>
-      <div class="kpis k3">${card('الجراج',money(cat(2)))}${card('الصيانة',money(cat(4)))}${other>0?card('أخرى (بنية تحتية، باقي ثمن، غرامات...)',money(other)):card('إجمالي المتحصل منذ البداية (شامل الصيانة والجراج)',money(all))}</div>${other>0?`<div class="kpis k3">${card('إجمالي المتحصل منذ البداية (شامل الصيانة والجراج)',money(all))}</div>`:''}`;
+  const kp=`<div class="kpis k3">${card('إجمالي المتحصل من المشروع (شامل الجراج، بدون الصيانة) – '+lbl,money(total))}${card('الأقساط',money(cat(0)))}${card('دفعات التعاقد',money(cat(1)))}</div>
+      <div class="kpis k3">${card('الجراج',money(cat(2)))}${other>0?card('أخرى (بنية تحتية، باقي ثمن، غرامات...)',money(other)):''}${card('إجمالي المتحصل منذ البداية (شامل الجراج، بدون الصيانة)',money(all))}</div>`;
   // مصفوفة السنة × الشهر (بتتأثر بفلتر السنة فقط)
   const yrs=state.pyear==='all'?years:[state.pyear];
   const mat={};inWrap();function inWrap(){inYear.forEach(x=>{const y=x.date.slice(0,4),m=+x.date.slice(5,7);(mat[y]=mat[y]||Array(13).fill(0));mat[y][m]+=x.amount;mat[y][0]+=x.amount})}
