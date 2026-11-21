@@ -27,7 +27,13 @@ h1{margin:0;font-size:26px}
 .upd{color:#dbe8ff;font-size:14px;margin-top:2px}
 .credit{text-align:center;color:#dbe8ff;font-size:15px;margin:44px 0 22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.25)}
 .credit b{color:#fff}
-.projects{display:flex;gap:12px;align-items:center;margin-top:18px}
+.projects{display:flex;gap:12px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.projects select{min-width:200px}
+.cmp td,.cmp th{white-space:nowrap;text-align:center}
+.cmp td:first-child,.cmp th:first-child{text-align:right;font-weight:700}
+.cmp tbody tr{cursor:pointer}
+.cmp tbody tr:hover{background:#eef3ff}
+.cmp tr.tot td{font-weight:700;background:#eaf1fb;cursor:default}
 .projects label{font-weight:700;font-size:17px}
 .projects select{font-weight:700;min-width:240px;background:var(--card)}
 .proj{border:0;cursor:pointer;font:600 15px 'Cairo',sans-serif;padding:8px 16px;border-radius:10px 10px 0 0;background:rgba(255,255,255,.25);color:#06142e}
@@ -48,6 +54,8 @@ select{font:inherit;font-size:16px;padding:6px 14px;border-radius:10px;border:1p
 .mdd-i{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:16px}
 .mdd-i:hover{background:#eef3ff}
 .mdd-i input{width:17px;height:17px;accent-color:#0b3d91}
+.subp{margin:12px 0 0;align-items:center}
+.subl{font-weight:700;font-size:16px;color:#06142e;margin-inline-start:4px}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
 .kpis.k3{grid-template-columns:repeat(3,1fr);margin-top:18px}
 .kpis.k3:first-of-type{margin-top:0}
@@ -78,6 +86,7 @@ th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--car
 #lock button{font:700 16px 'Cairo',sans-serif;width:100%;padding:10px;border:0;border-radius:10px;background:var(--c1);color:#fff;cursor:pointer}
 #lock .err{color:var(--warn);min-height:22px;font-size:14px}
 @media(max-width:900px){.kpis,.kpis.k3{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.logo{font-size:28px}.kpi .v{font-size:22px}}
+.subp .pill{padding:7px 15px;font-size:15px}
 </style>
 </head>
 <body>
@@ -159,7 +168,7 @@ const money=n=>`<small>ج.م</small> ${fmt(n)}`;
 const mkey=d=>d.slice(0,7);
 const mlabel=k=>{const[y,m]=k.split('-');return AR_M[+m-1]+' '+y};
 let CUT='';                       // أول الشهر الحالي: أي استحقاق قبله = متأخر
-const state={psub:'proj',pyear:'all',pmonths:['01','02','03','04','05','06','07','08','09','10','11','12'],pmopen:false,mkind:'all',myear:'all',proj:'all',tab:'inst',month:'latest',ryear:'cur',rmonth:'all',rmode:'all',cmonth:'all',smonth:'all'};
+const state={psub:'proj',pyear:'all',pmonths:['01','02','03','04','05','06','07','08','09','10','11','12'],pmopen:false,mkind:'all',myear:'all',proj:'all',sub:'all',tab:'inst',month:'latest',ryear:'cur',rmonth:'all',rmode:'all',cmonth:'all',smonth:'all'};
 let charts=[];
 const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0);
 const groupSum=(a,kf,vf)=>{const o={};a.forEach(x=>{const k=kf(x);o[k]=(o[k]||0)+vf(x)});return o};
@@ -189,27 +198,48 @@ function start(d){
   document.getElementById('lock').style.display='none';
   document.getElementById('app').style.display='';
   state.cur=u[0];
-  if(DATA.projects.length===1)state.proj=0;
-  if(d.projects.length===1)state.proj=0;
+  if(!DATA.groups)DATA.groups=DATA.projects.map((p,i)=>[p,[i]]);
+  if(DATA.groups.length===1)state.proj=0;
   render();
 }
-const F=a=>state.proj==='all'?a:a.filter(x=>x.p===state.proj);
+function actSet(){if(state.proj==='all')return null;const g=DATA.groups[state.proj];return new Set(state.sub==='all'?g[1]:[state.sub])}
+const F=a=>{const s=actSet();return s?a.filter(x=>s.has(x.p)):a};
+const multi=()=>{const s=actSet();return !s||s.size>1};
 
 /* ============ الواجهة ============ */
 const TABS=[['inst','الأقساط'],['col','المتحصل من المشروع'],['rem','المتبقي'],['con','دفعات التعاقد'],['sales','المبيعات'],['mi','الصيانة والبنية التحتية']];
 function shell(){
   const u=DATA.updated.split('-');
   document.getElementById('upd').textContent=`آخر تحديث للبيانات: ${u[2]}-${u[1]}-${u[0]}`+(DATA.synced?` — آخر مزامنة: ${DATA.synced}`:'');
-  const pl=DATA.projects.length===1?[[0,DATA.projects[0]]]:[['all','كل المشاريع'],...DATA.projects.map((p,i)=>[i,p])];
-  document.getElementById('projects').innerHTML=`<label>المشروع:</label><select id="psel">${opt(pl,state.proj)}</select>`;
+  const pl=DATA.groups.length===1?[[0,DATA.groups[0][0]]]:[['all','كل المشاريع'],...DATA.groups.map((g,i)=>[i,g[0]])];
+  const gm=state.proj==='all'?null:DATA.groups[state.proj];
+  const sp=gm&&gm[1].length>1?`<label>${esc(gm[0])}:</label><select id="ssel">${opt([['all','الكل ('+gm[1].length+' مشاريع)'],...gm[1].map(i=>[i,DATA.projects[i]])],state.sub)}</select>`:'';
+  document.getElementById('projects').innerHTML=`<label>المشروع:</label><select id="psel">${opt(pl,state.proj)}</select>${sp}`;
+  const ss=document.getElementById('ssel');if(ss)ss.onchange=()=>{state.sub=ss.value==='all'?'all':+ss.value;state.month='latest';state.cmonth='all';state.smonth='all';state.rmonth='all';render()};
   document.getElementById('tabs').innerHTML=TABS.map(([k,t])=>`<button class="tab ${k===state.tab?'on':''}" data-k="${k}">${k==='mi'&&!hasInfra()?'الصيانة':t}</button>`).join('');
-  document.getElementById('psel').onchange=e=>{state.proj=e.target.value==='all'?'all':+e.target.value;state.month='latest';state.cmonth='all';state.smonth='all';state.rmonth='all';render()};
+  document.getElementById('psel').onchange=e=>{state.proj=e.target.value==='all'?'all':+e.target.value;state.sub='all';state.month='latest';state.cmonth='all';state.smonth='all';state.rmonth='all';render()};
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{state.tab=b.dataset.k;render()});
+}
+function cmpHtml(){
+  if(state.proj==='all')return '';
+  const g=DATA.groups[state.proj];if(g[1].length<2||state.sub!=='all')return '';
+  const by=(a,p,f)=>sum(a.filter(x=>x.p===p),f);
+  const rows=g[1].map(p=>({p,n:DATA.sales.filter(x=>x.p===p).length,sales:by(DATA.sales,p,x=>x.value),
+    col:by(DATA.col.filter(x=>x.cat!==4&&x.cat!==5),p,x=>x.amount),
+    rem:by(DATA.rem.filter(x=>!x.m),p,x=>x.amount)+by(DATA.remg,p,x=>x.amount),
+    mi:by(DATA.mi.filter(x=>x.amount>0),p,x=>x.amount)}));
+  const T=k=>rows.reduce((s,r)=>s+r[k],0);
+  return `<div class="card" style="margin:18px 0"><h3>مقارنة مشاريع ${esc(g[0])} – كل الفترة (اضغط على مشروع لعرض تفاصيله)</h3><div class="scroll"><table class="cmp"><thead><tr><th>المشروع</th><th>الوحدات المباعة</th><th>المبيعات</th><th>المتحصل</th><th>المتبقي (بدون الصيانة والبنية التحتية)</th><th>الصيانة والبنية التحتية المتبقي</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr data-cp="${r.p}"><td>${esc(DATA.projects[r.p])}</td><td>${fmt(r.n)}</td><td>${fmt(r.sales)}</td><td>${fmt(r.col)}</td><td>${fmt(r.rem)}</td><td>${fmt(r.mi)}</td></tr>`).join('')}
+    <tr class="tot"><td>الإجمالي</td><td>${fmt(T('n'))}</td><td>${fmt(T('sales'))}</td><td>${fmt(T('col'))}</td><td>${fmt(T('rem'))}</td><td>${fmt(T('mi'))}</td></tr></tbody></table></div></div>`;
 }
 function render(){
   charts.forEach(c=>c.destroy());charts=[];
   shell();
   ({inst:vInst,col:vCol,rem:vRem,con:vCon,sales:vSales,mi:vMI})[state.tab]();
+  const ch=cmpHtml();
+  if(ch){const v=document.getElementById('view');const k0=v.querySelector('.kpis');k0?k0.insertAdjacentHTML('beforebegin',ch):v.insertAdjacentHTML('afterbegin',ch);
+    v.querySelectorAll('[data-cp]').forEach(tr=>tr.onclick=()=>{state.sub=+tr.dataset.cp;state.month='latest';state.cmonth='all';state.smonth='all';state.rmonth='all';render();window.scrollTo(0,0)})}
 }
 function mddLabel(sel){return sel.length===12?'كل الشهور':sel.length===0?'لا شيء':sel.length<=2?sel.map(m=>AR_M[+m-1]).join('، '):sel.length+' شهور'}
 function mddHtml(id,sel){return `<div class="mdd" id="${id}"><button type="button" class="mdd-b">${mddLabel(sel)}</button>${state.pmopen?`<div class="mdd-p"><div class="mdd-t"><button type="button" data-a="all">تحديد الكل</button><button type="button" data-a="none">مسح الكل</button></div>${AR_M.map((m,i)=>{const v=String(i+1).padStart(2,'0');return `<label class="mdd-i"><input type="checkbox" value="${v}" ${sel.includes(v)?'checked':''}> ${m}</label>`}).join('')}</div>`:''}</div>`}
@@ -222,7 +252,7 @@ function mddBind(id,key){const r=document.getElementById(id);if(!r)return;
 document.addEventListener('click',()=>{if(state.pmopen){state.pmopen=false;render()}});
 const M12=['01','02','03','04','05','06','07','08','09','10','11','12'];
 function bindSel(id,key){const e=document.getElementById(id);if(e)e.onchange=()=>{state[key]=e.value;render()}}
-const projName=()=>state.proj==='all'?'كل المشاريع':DATA.projects[state.proj];
+
 
 /* ---- الأقساط (المتحصل) ---- */
 function vInst(){
@@ -285,6 +315,11 @@ function vRem(){
   if(state.ryear==='none')gRem=gRem.filter(x=>!x.date);
   else if(state.ryear!=='all')gRem=gRem.filter(x=>x.date.startsWith(state.ryear));
   if(state.rmonth!=='all')gRem=gRem.filter(x=>x.date.slice(5,7)===state.rmonth);
+  let mRem=F(DATA.mi).filter(x=>x.amount>0);
+  if(state.ryear==='none')mRem=mRem.filter(x=>!x.date);
+  else if(state.ryear!=='all')mRem=mRem.filter(x=>x.date&&x.date.startsWith(state.ryear));
+  if(state.rmonth!=='all')mRem=mRem.filter(x=>x.date&&x.date.slice(5,7)===state.rmonth);
+  const mM=sum(mRem.filter(x=>!x.kind),x=>x.amount),mI=sum(mRem.filter(x=>x.kind===1),x=>x.amount),hasI=F(DATA.mi).some(x=>x.kind===1);
   let body;
   if(state.rmode==='all'){
     body=`<div class="grid2">
@@ -294,8 +329,8 @@ function vRem(){
     const sorted=rows.slice().sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
     const LIM=1500;
     body=`<div class="card" style="margin-top:18px"><h3>تفاصيل الأقساط المتبقية (شامل الجراج، بدون الصيانة)</h3><div class="scroll"><table>
-      <tr><th>تاريخ الاستحقاق</th><th>العميل</th><th>الوحدة</th>${state.proj==='all'?'<th>المشروع</th>':''}<th>النوع</th><th>المبلغ المتبقي</th><th>الحالة</th></tr>
-      ${sorted.slice(0,LIM).map(x=>{const l=x.date&&mkey(x.date)<CUT;return `<tr><td>${x.date||'—'}</td><td>${esc(x.client)}</td><td>${esc(x.unit)}</td>${state.proj==='all'?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${x.g?'جراج':'قسط'}</td><td>${fmt(x.amount)}</td><td class="${l?'late':''}">${!x.date?'بدون تاريخ':l?'متأخر':'قادم'}</td></tr>`}).join('')}
+      <tr><th>تاريخ الاستحقاق</th><th>العميل</th><th>الوحدة</th>${multi()?'<th>المشروع</th>':''}<th>النوع</th><th>المبلغ المتبقي</th><th>الحالة</th></tr>
+      ${sorted.slice(0,LIM).map(x=>{const l=x.date&&mkey(x.date)<CUT;return `<tr><td>${x.date||'—'}</td><td>${esc(x.client)}</td><td>${esc(x.unit)}</td>${multi()?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${x.g?'جراج':'قسط'}</td><td>${fmt(x.amount)}</td><td class="${l?'late':''}">${!x.date?'بدون تاريخ':l?'متأخر':'قادم'}</td></tr>`}).join('')}
       </table></div>${sorted.length>LIM?`<div class="note">معروض أول ${LIM} قسط من ${fmt(sorted.length)} — استخدم فلتر السنة أو الشهر للتضييق.</div>`:''}</div>`;
   }
   const fl=(state.ryear==='all'?'كل السنين':state.ryear==='none'?'بدون تاريخ':state.ryear)+(state.rmonth==='all'?'':' – '+AR_M[+state.rmonth-1]);
@@ -308,12 +343,19 @@ function vRem(){
   <div class="kpis">
     <div class="card kpi"><div class="t">متأخرات (قبل ${AR_M[+cm-1]} ${cy})</div><div class="v late">${money(sum(lateAll,x=>x.amount))}</div></div>
     <div class="card kpi"><div class="t">آخر تاريخ استحقاق</div><div class="v">${last}</div></div>
-    <div class="card kpi"><div class="t">إجمالي المتبقي (شامل الجراج، بدون الصيانة) – ${fl}</div><div class="v">${money(sum(rows,x=>x.amount))}</div></div>
+    <div class="card kpi"><div class="t">إجمالي المتبقي (بدون الصيانة والبنية التحتية) – ${fl}</div><div class="v">${money(sum(rows,x=>x.amount))}</div></div>
     <div class="card kpi"><div class="t">عدد الأقساط المتبقية (شامل الجراج) – ${fl}</div><div class="v">${fmt(rows.length)}</div></div>
   </div>
   <div class="kpis" style="margin-top:18px">
     <div class="card kpi"><div class="t">منها: الجراج المتبقي – ${fl}</div><div class="v">${money(sum(gRem,x=>x.amount))}</div></div>
     <div class="card kpi"><div class="t">منها: أقساط الجراج المتبقية – ${fl}</div><div class="v">${fmt(gRem.length)}</div></div>
+  </div>
+  <div class="kpis k3" style="margin-top:18px">
+    <div class="card kpi"><div class="t">${hasI?'الصيانة والبنية التحتية المتبقي':'الصيانة المتبقي'} – ${fl}</div><div class="v">${money(mM+mI)}</div></div>
+    ${hasI?`<div class="card kpi"><div class="t">منها: الصيانة – ${fl}</div><div class="v">${money(mM)}</div></div><div class="card kpi"><div class="t">منها: البنية التحتية – ${fl}</div><div class="v">${money(mI)}</div></div>`:`<div class="card kpi"><div class="t">عدد بنود الصيانة المتبقية – ${fl}</div><div class="v">${fmt(mRem.length)}</div></div>`}
+  </div>
+  <div class="kpis k3" style="margin-top:18px">
+    <div class="card kpi"><div class="t">إجمالي المتبقي (شامل الكل: الجراج والصيانة${hasI?' والبنية التحتية':''}) – ${fl}</div><div class="v">${money(sum(rows,x=>x.amount)+mM+mI)}</div></div>
   </div>${body}`;
   bindSel('fy','ryear');bindSel('fmo','rmonth');bindSel('fmode','rmode');
   if(state.rmode==='all'){
@@ -327,7 +369,7 @@ function vRem(){
 
 /* ---- المتحصل من المشروع / الصيانة ---- */
 function vCol(){
-  const A=F(DATA.col).filter(x=>x.cat!==4);
+  const A=F(DATA.col).filter(x=>x.cat!==4&&x.cat!==5);
   const years=[...new Set(A.map(x=>x.date.slice(0,4)))].sort();
   if(state.pyear!=='all'&&!years.includes(state.pyear))state.pyear='all';
   const inYear=state.pyear==='all'?A:A.filter(x=>x.date.startsWith(state.pyear));
@@ -366,7 +408,7 @@ function vCol(){
 }
 
 /* ---- الصيانة والبنية التحتية ---- */
-function hasInfra(){return DATA.mi.some(x=>x.kind===1&&(state.proj==='all'||x.p===state.proj))}
+function hasInfra(){return F(DATA.mi).some(x=>x.kind===1)}
 function vMI(){
   let A=F(DATA.mi);
   const HI=hasInfra();
@@ -383,9 +425,9 @@ function vMI(){
   const late=A.filter(x=>x.amount>0&&x.date&&mkey(x.date)<CUT);
   const lbl=({all:'الصيانة والبنية التحتية','0':'الصيانة','1':'البنية التحتية'})[state.mkind];
   const yl=state.myear==='all'?'كل السنين':state.myear==='none'?'بدون تاريخ':state.myear;
-  const key=state.proj==='all'?(x=>DATA.projects[x.p]):(x=>x.date?x.date.slice(0,4):'بدون تاريخ');
+  const key=multi()?(x=>DATA.projects[x.p]):(x=>x.date?x.date.slice(0,4):'بدون تاريخ');
   const byK=groupSum(rem,key,x=>x.amount);
-  const kk=Object.keys(byK).sort((a,b)=>state.proj==='all'?byK[b]-byK[a]:(a>b?1:-1));
+  const kk=Object.keys(byK).sort((a,b)=>multi()?byK[b]-byK[a]:(a>b?1:-1));
   const byM=groupSum(rem.filter(x=>x.date),x=>mkey(x.date),x=>x.amount);
   const k2=Object.keys(byM).sort();
   const sorted=rem.slice().sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
@@ -402,12 +444,12 @@ function vMI(){
     <div class="card kpi"><div class="t">عدد البنود المتبقية – ${yl}</div><div class="v">${fmt(rem.length)}</div></div>
   </div>
   <div class="grid2">
-    <div class="card"><h3>المتبقي ${state.proj==='all'?'حسب المشروع':'حسب السنة'}</h3><div class="chartbox"><canvas id="c1"></canvas></div></div>
+    <div class="card"><h3>المتبقي ${multi()?'حسب المشروع':'حسب السنة'}</h3><div class="chartbox"><canvas id="c1"></canvas></div></div>
     <div class="card"><h3>المتبقي شهريًا – الأحمر متأخرات (بدون التي ليس لها تاريخ)</h3><div class="chartbox"><canvas id="c2"></canvas></div></div>
   </div>
   <div class="card" style="margin-top:18px"><h3>تفاصيل المتبقي – ${lbl}</h3><div class="scroll"><table>
-    <tr><th>تاريخ الاستحقاق</th><th>العميل</th><th>الوحدة</th>${state.proj==='all'?'<th>المشروع</th>':''}<th>النوع</th><th>القيمة</th><th>المحصل</th><th>المتبقي</th><th>الحالة</th></tr>
-    ${sorted.slice(0,LIM).map(x=>{const l=x.date&&mkey(x.date)<CUT;return `<tr><td>${x.date||'—'}</td><td>${esc(x.client)}</td><td>${esc(x.unit)}</td>${state.proj==='all'?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${x.kind?'بنية تحتية':'صيانة'}</td><td>${fmt(x.total)}</td><td>${fmt(x.paid)}</td><td>${fmt(x.amount)}</td><td class="${l?'late':''}">${!x.date?'بدون تاريخ':l?'متأخر':'قادم'}</td></tr>`}).join('')}
+    <tr><th>تاريخ الاستحقاق</th><th>العميل</th><th>الوحدة</th>${multi()?'<th>المشروع</th>':''}<th>النوع</th><th>القيمة</th><th>المحصل</th><th>المتبقي</th><th>الحالة</th></tr>
+    ${sorted.slice(0,LIM).map(x=>{const l=x.date&&mkey(x.date)<CUT;return `<tr><td>${x.date||'—'}</td><td>${esc(x.client)}</td><td>${esc(x.unit)}</td>${multi()?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${x.kind?'بنية تحتية':'صيانة'}</td><td>${fmt(x.total)}</td><td>${fmt(x.paid)}</td><td>${fmt(x.amount)}</td><td class="${l?'late':''}">${!x.date?'بدون تاريخ':l?'متأخر':'قادم'}</td></tr>`}).join('')}
     </table></div>${sorted.length>LIM?`<div class="note">معروض أول ${LIM} بند من ${fmt(sorted.length)} — استخدم الفلاتر للتضييق.</div>`:''}</div>`;
   bindSel('mk','mkind');bindSel('my','myear');
   mk('c1',{type:'bar',data:{labels:kk,datasets:[{data:kk.map(k=>byK[k]),backgroundColor:'#0b3d91',borderRadius:4}]},options:hOpts()});
@@ -431,8 +473,8 @@ function vCon(){
     <div class="card kpi"><div class="t">الإجمالي منذ البداية</div><div class="v">${money(sum(A,x=>x.amount))}</div></div>
   </div>
   <div class="grid2">
-    <div class="card"><h3>الدفعات – ${lbl}</h3><div class="scroll"><table><tr><th>التاريخ</th><th>العميل</th><th>الوحدة</th>${state.proj==='all'?'<th>المشروع</th>':''}<th>المبلغ</th></tr>
-      ${rows.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,800).map(x=>`<tr><td>${x.date}</td><td>${esc(x.client)}</td><td>${esc(x.unit)}</td>${state.proj==='all'?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${fmt(x.amount)}</td></tr>`).join('')}</table></div></div>
+    <div class="card"><h3>الدفعات – ${lbl}</h3><div class="scroll"><table><tr><th>التاريخ</th><th>العميل</th><th>الوحدة</th>${multi()?'<th>المشروع</th>':''}<th>المبلغ</th></tr>
+      ${rows.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,800).map(x=>`<tr><td>${x.date}</td><td>${esc(x.client)}</td><td>${esc(x.unit)}</td>${multi()?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${fmt(x.amount)}</td></tr>`).join('')}</table></div></div>
     <div class="card"><h3>دفعات التعاقد شهريًا (اضغط على عمود لتصفية الشهر)</h3><div class="chartbox"><canvas id="c2"></canvas></div></div>
   </div>`;
   bindSel('fc','cmonth');
@@ -469,8 +511,8 @@ function vSales(){
     <div class="card"><h3>حسب نوع الوحدة – ${lbl}</h3><div class="chartbox"><canvas id="c1"></canvas></div></div>
     <div class="card"><h3>المبيعات شهريًا (اضغط على عمود لتصفية الشهر)</h3><div class="chartbox"><canvas id="c2"></canvas></div></div>
   </div>
-  <div class="card" style="margin-top:18px"><h3>الوحدات المباعة – ${lbl}</h3><div class="scroll"><table><tr><th>تاريخ التعاقد</th><th>العميل</th><th>الوحدة</th><th>النوع</th>${state.proj==='all'?'<th>المشروع</th>':''}<th>إجمالي الوحدة</th></tr>
-    ${rows.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<tr><td>${x.date}</td><td>${esc(x.client)}</td><td>${esc(x.unit)}</td><td>${x.type}</td>${state.proj==='all'?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${fmt(x.value)}</td></tr>`).join('')}</table></div></div>`;
+  <div class="card" style="margin-top:18px"><h3>الوحدات المباعة – ${lbl}</h3><div class="scroll"><table><tr><th>تاريخ التعاقد</th><th>العميل</th><th>الوحدة</th><th>النوع</th>${multi()?'<th>المشروع</th>':''}<th>إجمالي الوحدة</th></tr>
+    ${rows.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<tr><td>${x.date}</td><td>${esc(x.client)}</td><td>${esc(x.unit)}</td><td>${x.type}</td>${multi()?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${fmt(x.value)}</td></tr>`).join('')}</table></div></div>`;
   bindSel('fs','smonth');
   const tk=Object.keys(byT);
   mk('c1',{type:'bar',data:{labels:tk,datasets:[{data:tk.map(k=>byT[k]),backgroundColor:'#0b3d91',borderRadius:4}]},options:hOpts()});

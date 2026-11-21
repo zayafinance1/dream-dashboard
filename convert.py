@@ -17,18 +17,25 @@ PW = os.environ.get('DASH_PASSWORD', '')
 if len(PW) < 8:
     sys.exit('DASH_PASSWORD secret مش موجود أو قصير (8 حروف على الأقل).')
 ONLY = os.environ['PROJECT'].strip() if 'PROJECT' in os.environ else DEFAULT_PROJECT
+ONLY_LIST = [p.strip() for p in ONLY.replace('،', ',').split(',') if p.strip()]  # مشروع أو أكتر، مفصولين بفاصلة: 131,Flow
 HERE = os.path.dirname(os.path.abspath(__file__))
 # --- اقرا الشيت الأول: دوّر على صف العناوين (اللي فيه "اسم المشروع") بدل ما نفترض مكانه ---
-raw_top = pd.read_excel(XLSX, sheet_name=0, header=None, nrows=15)
-hdr_row = None
-for i in range(len(raw_top)):
-    if any(str(v).strip() == 'اسم المشروع' for v in raw_top.iloc[i].tolist()):
-        hdr_row = i; break
-if hdr_row is None:
-    names = pd.ExcelFile(XLSX).sheet_names
-    sys.exit('مش لاقي عمود "اسم المشروع" في أول 15 صف من الشيت الأول. الشيتات: %s | أول صف: %s'
-             % (names, [str(v) for v in raw_top.iloc[0].tolist()[:12]]))
-df = pd.read_excel(XLSX, sheet_name=0, header=hdr_row)
+def _find_sheet():
+    xl = pd.ExcelFile(XLSX)
+    order = sorted(xl.sheet_names, key=lambda n: 0 if n.strip() == 'المشاريع' else 1)
+    for sn in order:
+        try:
+            top = pd.read_excel(XLSX, sheet_name=sn, header=None, nrows=15)
+        except Exception:
+            continue
+        for i in range(len(top)):
+            vals = [str(v).strip() for v in top.iloc[i].tolist()]
+            if 'اسم المشروع' in vals and 'نوع الدفعة' in vals:
+                return sn, i
+    sys.exit('مش لاقي شيت فيه عمودين "اسم المشروع" و"نوع الدفعة" في الملف. الشيتات الموجودة: %s' % xl.sheet_names)
+SHEET, hdr_row = _find_sheet()
+print('sheet:', SHEET, 'header row:', hdr_row)
+df = pd.read_excel(XLSX, sheet_name=SHEET, header=hdr_row)
 df.columns = [str(c).strip() for c in df.columns]
 # لو عمود "المحصل" اتغير اسمه لـ "القيمة" (فبقى عندنا عمودين "القيمة")، التاني هو المحصل
 _cols = list(df.columns)
@@ -45,9 +52,11 @@ if missing:
 df = df.loc[:, ~df.columns.duplicated()]
 df = df[df['اسم المشروع'].notna()].copy()
 df['اسم المشروع'] = df['اسم المشروع'].astype(str).str.strip()
-if ONLY: df = df[df['اسم المشروع'] == ONLY].copy()
+def _wanted(p):
+    return any((p.startswith(x[:-1]) if x.endswith('*') else p == x) for x in ONLY_LIST)
+if ONLY_LIST: df = df[df['اسم المشروع'].map(_wanted)].copy()
 if df.empty:
-    sys.exit('مفيش صفوف للمشروع "%s". المشاريع الموجودة في الملف: %s' % (ONLY, sorted(set(pd.read_excel(XLSX, sheet_name=0, header=hdr_row)['اسم المشروع'].dropna().astype(str).str.strip()))))
+    sys.exit('مفيش صفوف للمشروع "%s". المشاريع الموجودة في الملف: %s' % (ONLY_LIST, sorted(set(pd.read_excel(XLSX, sheet_name=SHEET, header=hdr_row)['اسم المشروع'].dropna().astype(str).str.strip()))))
 df['t'] = df['نوع الدفعة'].fillna('').astype(str).str.strip()
 stats = {}
 
@@ -55,7 +64,7 @@ stats = {}
 upd = None
 if hdr_row >= 1:
     import datetime as _dt
-    for v in pd.read_excel(XLSX, sheet_name=0, header=None, nrows=hdr_row).iloc[hdr_row - 1].tolist():
+    for v in pd.read_excel(XLSX, sheet_name=SHEET, header=None, nrows=hdr_row).iloc[hdr_row - 1].tolist():
         if isinstance(v, (_dt.datetime, pd.Timestamp)) and not pd.isna(v):
             upd = pd.Timestamp(v)
 if upd is None:
@@ -86,14 +95,30 @@ def norm_channel(v):
 def is_inst(t): return 'قسط' in t and 'صيانة' not in t and 'جراج' not in t
 def is_con(t): return t in ('تعاقد', 'مقدم', 'تعاقد + جراج')
 def cat_of(t):
-    """0 قسط | 1 تعاقد | 2 جراج | 3 أخرى | 4 صيانة"""
+    """0 قسط | 1 تعاقد | 2 جراج | 3 أخرى | 4 صيانة | 5 بنية تحتية"""
     if 'صيانة' in t: return 4
+    if 'تحتية' in t: return 5
     if is_con(t): return 1
     if is_inst(t): return 0
     if 'جراج' in t: return 2
     return 3
 
-projects = df['اسم المشروع'].value_counts().index.tolist()
+# تجميع المشاريع في مجموعات: كل "لاكاسيل ..." تحت لاكاسيل، وكل "دريم ..." تحت دريم، وكل "رودي ..." تحت رودي، وغيرهم لوحدهم
+def group_of(p):
+    for g in ('لاكاسيل', 'دريم', 'رودي'):
+        if p.startswith(g): return g
+    return p
+def _nat(p): return [int(x) if x.isdigit() else x for x in re.split(r'(\d+)', p)]
+_cnt = df['اسم المشروع'].value_counts()
+_gcnt = {}
+for _p, _n in _cnt.items(): _gcnt[group_of(_p)] = _gcnt.get(group_of(_p), 0) + _n
+_gorder = sorted(_gcnt, key=lambda g: -_gcnt[g])
+projects = []
+groups = []
+for _g in _gorder:
+    _mem = sorted([p for p in _cnt.index if group_of(p) == _g], key=lambda p: (p != _g, _nat(p)))
+    groups.append([_g, list(range(len(projects), len(projects) + len(_mem)))])
+    projects += _mem
 pidx = {p: i for i, p in enumerate(projects)}
 D = lambda x: x.strftime('%Y-%m-%d')
 r2 = lambda x: round(float(x), 2)
@@ -180,7 +205,7 @@ try:
     _now = datetime.now(ZoneInfo('Africa/Cairo'))
 except Exception:
     _now = datetime.now(timezone(timedelta(hours=2)))
-payload = dict(updated=updated, synced=_now.strftime('%Y-%m-%d %H:%M'), projects=projects, inst=inst, con=con, rem=rem, sales=sales, mi=mi, col=colall, gsales=gsales, remg=remg)
+payload = dict(updated=updated, synced=_now.strftime('%Y-%m-%d %H:%M'), projects=projects, groups=groups, inst=inst, con=con, rem=rem, sales=sales, mi=mi, col=colall, gsales=gsales, remg=remg)
 raw = gzip.compress(json.dumps(payload, ensure_ascii=False, separators=(',', ':')).encode('utf-8'), 9)
 salt, iv = os.urandom(16), os.urandom(12)
 key = PBKDF2HMAC(hashes.SHA256(), 32, salt, 200000).derive(PW.encode('utf-8'))
