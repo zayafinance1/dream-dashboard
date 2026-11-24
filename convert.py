@@ -92,7 +92,7 @@ def norm_channel(v):
         if n not in out: out.append(n)
     return out[0] if len(out) == 1 else 'أكثر من جهة'
 
-def is_inst(t): return 'قسط' in t and 'صيانة' not in t and 'جراج' not in t
+def is_inst(t): return ('قسط' in t or 'باقي ثمن' in t) and 'صيانة' not in t and 'جراج' not in t  # باقي ثمن الوحدة بيتحسب مع الأقساط
 def is_con(t): return t in ('تعاقد', 'مقدم', 'تعاقد + جراج')
 def cat_of(t):
     """0 قسط | 1 تعاقد | 2 جراج | 3 أخرى | 4 صيانة | 5 بنية تحتية"""
