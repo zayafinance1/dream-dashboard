@@ -140,13 +140,26 @@ colall = [[D(r['d']), r2(r['المحصل']), norm_channel(r['البنك المح
           for _, r in col.iterrows()]
 
 # ---- remaining installments
+def NOTE(r):
+    v = r.get('الملاحظات') if hasattr(r, 'get') else None
+    return '' if v is None or pd.isna(v) else ' '.join(str(v).split())
 rem_df = pay[(pay['t'].map(is_inst) | pay['t'].str.contains('صيانة')) & (pay['المتبقى'].fillna(0) > 0)]
 stats['remaining_rows_no_date'] = int(rem_df['تاريخ الاستحقاق'].isna().sum())
 rem = [[D(r['تاريخ الاستحقاق']) if pd.notna(r['تاريخ الاستحقاق']) else '', r2(r['المتبقى']),
         str(r['القطعة']).strip() if pd.notna(r['القطعة']) else '',
         str(r['اسم العميل']).strip() if pd.notna(r['اسم العميل']) else '', pidx[r['اسم المشروع']],
-        1 if 'صيانة' in r['t'] else 0]
+        1 if 'صيانة' in r['t'] else 0, NOTE(r)]
        for _, r in rem_df.iterrows()]
+
+# ---- المتأخرات: حالة القسط من عمود "القسط" (العمود U) = متاخرات
+late = []
+if 'القسط' in pay.columns:
+    _st = pay['القسط'].fillna('').astype(str).str.strip()
+    _ld = pay[_st.isin(['متاخرات', 'متأخرات', 'متاخر', 'متأخر']) & (pay['المتبقى'].fillna(0) > 0)]
+    late = [[D(r['تاريخ الاستحقاق']) if pd.notna(r['تاريخ الاستحقاق']) else '', r2(r['المتبقى']),
+             str(r['القطعة']).strip() if pd.notna(r['القطعة']) else '',
+             str(r['اسم العميل']).strip() if pd.notna(r['اسم العميل']) else '',
+             pidx[r['اسم المشروع']], r['t'], cat_of(r['t']), NOTE(r)] for _, r in _ld.iterrows()]
 
 # ---- sales: every row carrying اجمالى الوحدة (the unit total may sit on the header row
 # or on the first payment row). Unit total = sum of those rows per (project, unit, client);
@@ -185,7 +198,7 @@ for (pj, unit, cl), g in gh.groupby(['اسم المشروع', 'unit', 'client'],
     gsales.append([dd, unit, r2(g['اجمالى الوحدة'].sum()), cl, pidx[pj]])
 # (ب) أقساط الجراج المتبقية
 remg = [[D(r['تاريخ الاستحقاق']) if pd.notna(r['تاريخ الاستحقاق']) else '', r2(r['المتبقى']),
-         str(r['القطعة']).strip() if pd.notna(r['القطعة']) else '', str(r['اسم العميل']).strip() if pd.notna(r['اسم العميل']) else '', pidx[r['اسم المشروع']]]
+         str(r['القطعة']).strip() if pd.notna(r['القطعة']) else '', str(r['اسم العميل']).strip() if pd.notna(r['اسم العميل']) else '', pidx[r['اسم المشروع']], NOTE(r)]
         for _, r in pay[(pay['t'].map(cat_of) == 2) & (pay['المتبقى'].fillna(0) > 0)].iterrows()]
 
 
@@ -198,14 +211,14 @@ mi = [[D(r['تاريخ الاستحقاق']) if pd.notna(r['تاريخ الاس�
        r2(r['المتبقى']) if pd.notna(r['المتبقى']) else 0,
        str(r['القطعة']).strip() if pd.notna(r['القطعة']) else '',
        str(r['اسم العميل']).strip() if pd.notna(r['اسم العميل']) else '',
-       pidx[r['اسم المشروع']], MI[r['t']]] for _, r in mi_df.iterrows()]
+       pidx[r['اسم المشروع']], MI[r['t']], NOTE(r)] for _, r in mi_df.iterrows()]
 
 try:
     from zoneinfo import ZoneInfo
     _now = datetime.now(ZoneInfo('Africa/Cairo'))
 except Exception:
     _now = datetime.now(timezone(timedelta(hours=2)))
-payload = dict(updated=updated, synced=_now.strftime('%Y-%m-%d %H:%M'), projects=projects, groups=groups, inst=inst, con=con, rem=rem, sales=sales, mi=mi, col=colall, gsales=gsales, remg=remg)
+payload = dict(updated=updated, synced=_now.strftime('%Y-%m-%d %H:%M'), projects=projects, groups=groups, late=late, inst=inst, con=con, rem=rem, sales=sales, mi=mi, col=colall, gsales=gsales, remg=remg)
 raw = gzip.compress(json.dumps(payload, ensure_ascii=False, separators=(',', ':')).encode('utf-8'), 9)
 salt, iv = os.urandom(16), os.urandom(12)
 key = PBKDF2HMAC(hashes.SHA256(), 32, salt, 200000).derive(PW.encode('utf-8'))

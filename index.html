@@ -87,6 +87,11 @@ th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--car
 #lock .err{color:var(--warn);min-height:22px;font-size:14px}
 @media(max-width:900px){.kpis,.kpis.k3{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.logo{font-size:28px}.kpi .v{font-size:22px}}
 .subp .pill{padding:7px 15px;font-size:15px}
+.lnote{white-space:normal!important;min-width:260px;max-width:460px;text-align:right!important;font-weight:400!important;color:#33466b}
+.ltab td,.ltab th{white-space:nowrap}
+.ltab td.n{white-space:normal}
+.lsearch{font:inherit;font-size:16px;padding:6px 14px;border-radius:10px;border:1px solid #c5d4ee;background:#fff;min-width:240px}
+.muted{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -168,7 +173,7 @@ const money=n=>`<small>ج.م</small> ${fmt(n)}`;
 const mkey=d=>d.slice(0,7);
 const mlabel=k=>{const[y,m]=k.split('-');return AR_M[+m-1]+' '+y};
 let CUT='';                       // أول الشهر الحالي: أي استحقاق قبله = متأخر
-const state={psub:'proj',pyear:'all',pmonths:['01','02','03','04','05','06','07','08','09','10','11','12'],pmopen:false,mkind:'all',myear:'all',proj:'all',sub:'all',tab:'inst',month:'latest',ryear:'cur',rmonth:'all',rmode:'all',cmonth:'all',smonth:'all'};
+const state={psub:'proj',pyear:'all',pmonths:['01','02','03','04','05','06','07','08','09','10','11','12'],pmopen:false,mkind:'all',myear:'all',proj:'all',sub:'all',lcat:'all',lq:'',lview:'grp',tab:'inst',month:'latest',ryear:'cur',rmonth:'all',rmode:'all',cmonth:'all',smonth:'all'};
 let charts=[];
 const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0);
 const groupSum=(a,kf,vf)=>{const o={};a.forEach(x=>{const k=kf(x);o[k]=(o[k]||0)+vf(x)});return o};
@@ -184,7 +189,7 @@ const opt=(arr,sel)=>arr.map(([v,t])=>`<option value="${v}" ${String(v)===String
 
 function start(d){
   DATA=d;
-  ['inst','con','rem','sales','mi','col','gsales','remg'].forEach(k=>{
+  ['inst','con','rem','sales','mi','col','gsales','remg','late'].forEach(k=>{
     DATA[k]=(d[k]||[]).map(r=>k==='inst'?{date:r[0],amount:r[1],channel:r[2],p:r[3]}
       :k==='con'?{date:r[0],amount:r[1],channel:r[2],p:r[3],unit:r[4],client:r[5]}
       :k==='rem'?{date:r[0],amount:r[1],unit:r[2],client:r[3],p:r[4],m:r[5]}
@@ -192,6 +197,7 @@ function start(d){
       :k==='col'?{date:r[0],amount:r[1],channel:r[2],p:r[3],cat:r[4]}
       :k==='gsales'?{date:r[0],unit:r[1],value:r[2],client:r[3],p:r[4]}
       :k==='remg'?{date:r[0],amount:r[1],unit:r[2],client:r[3],p:r[4]}
+      :k==='late'?{date:r[0],amount:r[1],unit:r[2],client:r[3],p:r[4],type:r[5],cat:r[6],note:r[7]||''}
       :{date:r[0],unit:r[1],type:r[2],value:r[3],client:r[4],p:r[5]});
   });
   const u=d.updated.split('-');CUT=u[0]+'-'+u[1];
@@ -207,7 +213,7 @@ const F=a=>{const s=actSet();return s?a.filter(x=>s.has(x.p)):a};
 const multi=()=>{const s=actSet();return !s||s.size>1};
 
 /* ============ الواجهة ============ */
-const TABS=[['inst','الأقساط'],['col','المتحصل من المشروع'],['rem','المتبقي'],['con','دفعات التعاقد'],['sales','المبيعات'],['mi','الصيانة والبنية التحتية']];
+const TABS=[['inst','الأقساط'],['col','المتحصل من المشروع'],['rem','المتبقي'],['late','المتأخرات'],['con','دفعات التعاقد'],['sales','المبيعات'],['mi','الصيانة والبنية التحتية']];
 function shell(){
   const u=DATA.updated.split('-');
   document.getElementById('upd').textContent=`آخر تحديث للبيانات: ${u[2]}-${u[1]}-${u[0]}`+(DATA.synced?` — آخر مزامنة: ${DATA.synced}`:'');
@@ -236,7 +242,7 @@ function cmpHtml(){
 function render(){
   charts.forEach(c=>c.destroy());charts=[];
   shell();
-  ({inst:vInst,col:vCol,rem:vRem,con:vCon,sales:vSales,mi:vMI})[state.tab]();
+  ({inst:vInst,col:vCol,rem:vRem,late:vLate,con:vCon,sales:vSales,mi:vMI})[state.tab]();
   const ch=cmpHtml();
   if(ch){const v=document.getElementById('view');const k0=v.querySelector('.kpis');k0?k0.insertAdjacentHTML('beforebegin',ch):v.insertAdjacentHTML('afterbegin',ch);
     v.querySelectorAll('[data-cp]').forEach(tr=>tr.onclick=()=>{state.sub=+tr.dataset.cp;state.month='latest';state.cmonth='all';state.smonth='all';state.rmonth='all';render();window.scrollTo(0,0)})}
@@ -291,6 +297,68 @@ function vInst(){
   const k2=Object.keys(byM).sort();
   mk('c2',{type:'bar',data:{labels:k2.map(mlabel),datasets:[{data:k2.map(k=>byM[k]),backgroundColor:k2.map(k=>k===state.month?'#0b3d91':'#2f80ed'),borderRadius:3}]},
     options:vOpts({onClick:(e,els)=>{if(els.length){const k=k2[els[0].index];state.month=state.month===k?'all':k;render()}}})});
+}
+
+
+/* ---- المتأخرات (حالة القسط = متاخرات من عمود U) ---- */
+const LCATS=[['all','الكل'],['0','الأقساط'],['2','الجراج'],['m','الصيانة والبنية التحتية'],['3','أخرى (تعاقد، غرامات، تأمين...)']];
+const lgrp=c=>c===0?'0':c===2?'2':(c===4||c===5)?'m':'3';
+function vLate(){
+  const ALL=F(DATA.late);
+  const A=state.lcat==='all'?ALL:ALL.filter(x=>lgrp(x.cat)===state.lcat);
+  const q=state.lq.trim().toLowerCase();
+  const rows=q?A.filter(x=>(x.client+' '+x.unit+' '+x.note+' '+x.type).toLowerCase().includes(q)):A;
+  const U=new Date(DATA.updated+'T00:00:00');
+  const days=x=>x.date?Math.max(0,Math.round((U-new Date(x.date+'T00:00:00'))/86400000)):null;
+  const total=sum(rows,x=>x.amount);
+  const keyOf=x=>x.p+'|'+x.client+'|'+x.unit;
+  const clients=new Set(rows.map(keyOf));
+  const dated=rows.filter(x=>x.date).sort((a,b)=>a.date<b.date?-1:1);
+  const oldest=dated[0];
+  const gs=g=>sum(ALL.filter(x=>lgrp(x.cat)===g),x=>x.amount);
+  const otherTypes=[...new Set(ALL.filter(x=>lgrp(x.cat)==='3').map(x=>x.type))].sort((p,q)=>sum(ALL.filter(x=>x.type===q),y=>y.amount)-sum(ALL.filter(x=>x.type===p),y=>y.amount));
+  const card=(t,v)=>`<div class="card kpi"><div class="t">${t}</div><div class="v">${v}</div></div>`;
+  const B=[['حتى 30 يوم',0,30],['31 – 90 يوم',31,90],['91 – 180 يوم',91,180],['181 – 365 يوم',181,365],['أكثر من سنة',366,1e9]];
+  const bs=B.map(([n,a,b])=>sum(rows.filter(x=>{const d=days(x);return d!==null&&d>=a&&d<=b}),x=>x.amount));
+  const und=sum(rows.filter(x=>!x.date),x=>x.amount);
+  const labels=B.map(b=>b[0]).concat(und>0?['بدون تاريخ استحقاق']:[]), vals=bs.concat(und>0?[und]:[]);
+  let body;
+  if(state.lview==='grp'){
+    const g={};
+    rows.forEach(x=>{const k=keyOf(x);const o=g[k]||(g[k]={client:x.client,unit:x.unit,p:x.p,n:0,amt:0,oldest:'',notes:new Set(),types:new Set()});
+      o.n++;o.amt+=x.amount;if(x.date&&(!o.oldest||x.date<o.oldest))o.oldest=x.date;if(x.note)o.notes.add(x.note);o.types.add(x.type)});
+    const list=Object.values(g).sort((a,b)=>b.amt-a.amt);
+    const LIM=1500;
+    body=`<div class="card"><h3>المتأخرات بالعميل والوحدة – ${fmt(list.length)} عميل/وحدة</h3><div class="scroll"><table class="ltab"><thead><tr><th>العميل</th><th>الوحدة</th>${multi()?'<th>المشروع</th>':''}<th>عدد الأقساط</th><th>إجمالي المتأخر</th><th>أقدم استحقاق</th><th>أيام التأخير</th><th>الملاحظات</th></tr></thead><tbody>
+    ${list.slice(0,LIM).map(o=>{const d=o.oldest?Math.max(0,Math.round((U-new Date(o.oldest+'T00:00:00'))/86400000)):null;return `<tr><td class="n">${esc(o.client)}</td><td>${esc(o.unit)}</td>${multi()?`<td>${esc(DATA.projects[o.p])}</td>`:''}<td>${fmt(o.n)}</td><td><b>${fmt(o.amt)}</b></td><td>${o.oldest||'—'}</td><td>${d===null?'—':fmt(d)}</td><td class="n lnote">${esc([...o.notes].join(' | '))}</td></tr>`}).join('')}
+    </tbody></table></div>${list.length>LIM?`<p class="muted">معروض أول ${fmt(LIM)} من ${fmt(list.length)}.</p>`:''}</div>`;
+  }else{
+    const sorted=[...rows].sort((a,b)=>(a.date||'9999')<(b.date||'9999')?-1:1);
+    const LIM=1500;
+    body=`<div class="card"><h3>تفاصيل الأقساط المتأخرة – ${fmt(rows.length)} قسط</h3><div class="scroll"><table class="ltab"><thead><tr><th>تاريخ الاستحقاق</th><th>العميل</th><th>الوحدة</th>${multi()?'<th>المشروع</th>':''}<th>النوع</th><th>المبلغ المتأخر</th><th>أيام التأخير</th><th>الملاحظات</th></tr></thead><tbody>
+    ${sorted.slice(0,LIM).map(x=>{const d=days(x);return `<tr><td>${x.date||'—'}</td><td class="n">${esc(x.client)}</td><td>${esc(x.unit)}</td>${multi()?`<td>${esc(DATA.projects[x.p])}</td>`:''}<td>${esc(x.type)}</td><td><b>${fmt(x.amount)}</b></td><td>${d===null?'—':fmt(d)}</td><td class="n lnote">${esc(x.note)}</td></tr>`}).join('')}
+    </tbody></table></div>${sorted.length>LIM?`<p class="muted">معروض أول ${fmt(LIM)} من ${fmt(sorted.length)}.</p>`:''}</div>`;
+  }
+  document.getElementById('view').innerHTML=`
+  <div class="filters"><label>النوع:</label><select id="lc">${opt(LCATS,state.lcat)}</select>
+    <label>العرض:</label><select id="lv">${opt([['grp','مجمّع بالعميل والوحدة'],['det','تفصيلي (قسط قسط)']],state.lview)}</select>
+    <label>بحث:</label><input id="lq" class="lsearch" type="search" placeholder="اسم العميل أو الوحدة أو الملاحظات" value="${esc(state.lq)}"></div>
+  <div class="kpis">
+    ${card('إجمالي المتأخرات',money(total))}
+    ${card('عدد الأقساط المتأخرة',fmt(rows.length))}
+    ${card('عدد العملاء/الوحدات المتأخرة',fmt(clients.size))}
+    ${card('أقدم استحقاق متأخر',oldest?`${oldest.date}<div class="muted" style="font-size:14px;margin-top:4px">منذ ${fmt(days(oldest))} يوم</div>`:'—')}
+  </div>
+  <div class="kpis" style="margin-top:18px">
+    ${card('أقساط متأخرة',money(gs('0')))}${card('جراج متأخر',money(gs('2')))}${card('صيانة وبنية تحتية متأخرة',money(gs('m')))}
+  </div>
+  ${otherTypes.length?`<div class="kpis k3" style="margin-top:18px">${otherTypes.map(t=>card(esc(t)+' (متأخر)',money(sum(ALL.filter(x=>lgrp(x.cat)==='3'&&x.type===t),x=>x.amount)))).join('')}</div>`:''}
+  <div class="card" style="margin:18px 0"><h3>المتأخرات حسب مدة التأخير</h3><div class="chartbox"><canvas id="lc1"></canvas></div></div>
+  ${body}`;
+  bindSel('lc','lcat');bindSel('lv','lview');
+  const qi=document.getElementById('lq');
+  qi.oninput=()=>{state.lq=qi.value;const pos=qi.selectionStart;render();const n=document.getElementById('lq');n.focus();try{n.setSelectionRange(pos,pos)}catch(e){}};
+  mk('lc1',{type:'bar',data:{labels,datasets:[{data:vals,backgroundColor:'#c0392b',borderRadius:4}]},options:vOpts()});
 }
 
 /* ---- المتبقي ---- */
